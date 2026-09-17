@@ -6,7 +6,7 @@
 #define SCREEN_WIDTH 940
 #define SCREEN_HEIGHT 780
 #define LANE_SIZE 60
-#define score_side 100
+#define score_side 200
 
 int main(void)
 {
@@ -17,7 +17,7 @@ int main(void)
     
     const int cell_width=LANE_SIZE;  
     const int cellHeight=LANE_SIZE; 
-    
+    const float dt=GetFrameTime();
     
     int total_lives=5;           
     int score=0; 
@@ -30,9 +30,9 @@ int main(void)
 
 
 
-   // Texture2D bg_image=LoadTexture("background.png");
-    //Rectangle bg_src={ 0.0f,0.0f,(float)bg_image.width,(float)bg_image.height};
-    //Rectangle bg_position = { 0.0f, 0.0f,(float)SCREEN_WIDTH-score_side,(float)SCREEN_HEIGHT};
+    Texture2D bg_image=LoadTexture("Frogger_sprites/background.png");
+    Rectangle bg_src={ 0.0f,0.0f,(float)bg_image.width,(float)bg_image.height};
+    Rectangle bg_position = { 0.0f, 0.0f,(float)SCREEN_WIDTH-score_side,(float)SCREEN_HEIGHT};
     Vector2 origin={ 0.0f, 0.0f };
 
     
@@ -100,7 +100,7 @@ int main(void)
         { 0,0,lives[4].width,lives[4].height }
     };
 
-    Rectangle lives_position={SCREEN_WIDTH-score_side,580,99,30};
+    Rectangle lives_position={SCREEN_WIDTH-score_side+20,580,99,30};
 
    
     Rectangle car_position[5][3]={
@@ -112,14 +112,14 @@ int main(void)
     };
 
     Rectangle turtle_position[2][3]={
-        { { 0, 5 * cellHeight, 3*cell_width, cellHeight}, { 5 *cell_width, 5 * cellHeight+2, 3*cell_width, cellHeight}, { 10 *cell_width, 5 * cellHeight, 3*cell_width, cellHeight } },
-        { { 0, 2 * cellHeight, 2*cell_width, cellHeight }, { 6 *cell_width, 2 * cellHeight, 2*cell_width, cellHeight }, { 12 *cell_width, 2 * cellHeight, 2*cell_width, cellHeight } }
+        { { 0, 5 * cellHeight, 3*cell_width, cellHeight}, { 4 *cell_width, 5 * cellHeight+2, 3*cell_width, cellHeight}, { 9*cell_width, 5 * cellHeight, 3*cell_width, cellHeight } },
+        { { 0, 2 * cellHeight, 2*cell_width, cellHeight }, { 5 *cell_width, 2 * cellHeight, 2*cell_width, cellHeight }, { 10*cell_width, 2 * cellHeight, 2*cell_width, cellHeight } }
     };
 
     Rectangle log_position[3][3]={
-        { { 0, 4 * cellHeight,cell_width * 3, cellHeight }, { 5 *cell_width, 4 * cellHeight,cell_width * 3, cellHeight }, { 10 *cell_width, 4 * cellHeight,cell_width*3, cellHeight } },
-        { { 0, 3 * cellHeight,cell_width * 5, cellHeight }, { 7 *cell_width, 3 * cellHeight,cell_width * 5, cellHeight }, { 14 *cell_width, 3 * cellHeight,cell_width*5, cellHeight } },
-        { { 0, cellHeight,cell_width*4, cellHeight }, { 7 *cell_width, cellHeight,cell_width*4, cellHeight }, { 14 *cell_width, cellHeight,cell_width*4, cellHeight } }
+        { { 0, 4 * cellHeight,cell_width * 2, cellHeight }, { 5 *cell_width, 4 * cellHeight,cell_width * 2, cellHeight }, { 10 *cell_width, 4 * cellHeight,cell_width*2, cellHeight } },
+        { { 0, 3 * cellHeight,cell_width * 4, cellHeight }, { 7 *cell_width, 3 * cellHeight,cell_width * 4, cellHeight }, { 14 *cell_width, 3 * cellHeight,cell_width*4, cellHeight } },
+        { { 0, cellHeight,cell_width*3, cellHeight }, { 7 *cell_width, cellHeight,cell_width*3, cellHeight }, { 14 *cell_width, cellHeight,cell_width*3, cellHeight } }
     };
 
     Rectangle safe_house[5]={{0,0,80,LANE_SIZE},{190,0,80,LANE_SIZE},{190*2,0,80,LANE_SIZE},
@@ -137,7 +137,7 @@ int main(void)
     while (!WindowShouldClose() && total_lives!=0)
     {
         if (IsKeyPressed(KEY_UP) && position.y > 0) {
-            position.y -= speed;
+            position.y -=speed+speed*dt;
            if(y==0)
            {
             score+=10;
@@ -146,20 +146,20 @@ int main(void)
            if(y>0) ++y;
         }
         if (IsKeyPressed(KEY_DOWN) && position.y < SCREEN_HEIGHT-LANE_SIZE) {
-            position.y += speed;
+            position.y +=speed+speed*dt;
              ++y;
         }
         if (IsKeyPressed(KEY_LEFT) && position.x > 0) {
-            position.x -= speed;
+            position.x -=speed+speed*dt;
         }
         if (IsKeyPressed(KEY_RIGHT) && position.x < SCREEN_WIDTH-score_side-LANE_SIZE) {
-            position.x += speed;
+            position.x +=speed+speed*dt;
         }
 
         for (int i = 0; i < 5; i++) {
             for (int j = 0; j < 3; j++) {
                 car_position[i][j].x += car_speeds[i];
-                if ( car_speeds[i] > 0 && car_position[i][j].x > SCREEN_WIDTH-score_side-car_position[i][j].width) {
+                if ( car_speeds[i] > 0 && car_position[i][j].x > SCREEN_WIDTH-car_position[i][j].width) {
                     car_position[i][j].x =-car_position[i][j].width;
                 }
                 else if (car_speeds[i] < 0 && car_position[i][j].x < -car_position[i][j].width) {
@@ -171,7 +171,7 @@ int main(void)
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
                 log_position[i][j].x += log_speeds[i];
-                if (log_position[i][j].x > SCREEN_WIDTH-score_side-log_position[i][j].width) {
+                if (log_position[i][j].x > SCREEN_WIDTH-log_position[i][j].width) {
                     log_position[i][j].x = -log_position[i][j].width;
                 }
             }
@@ -185,7 +185,74 @@ int main(void)
                 }
             }
         }
-Rectangle frog_area={position.x,position.y,55,55};
+
+// =================================================================
+// 1. UPDATE THE FROG'S COLLISION RECTANGLE EVERY FRAME (CRITICAL!)
+// =================================================================
+// We update frog_area dynamically using the current position.x and position.y
+Rectangle frog_area = { position.x - 4, position.y - 2, 52, 52 };
+
+// Convert the frog's exact Y position to its current grid row index
+int frog_row = (int)(position.y / cellHeight); 
+
+bool on_river = false;
+bool safe_on_object = false;
+float drift_speed = 0.0f;
+
+// =================================================================
+// 2. CHECK TURTLE LANES (Row 5 and Row 2 in your array)
+// =================================================================
+if (frog_row == 5 || frog_row == 2) 
+{
+    on_river = true;
+    
+    // Map grid rows to your turtle_position array indices (Row 5 -> Index 0, Row 2 -> Index 1)
+    int i = (frog_row == 5) ? 0 : 1; 
+    
+    for (int j = 0; j < 3; j++) {
+        if (CheckCollisionRecs(frog_area, turtle_position[i][j])) {
+            safe_on_object = true;
+            drift_speed = turtle_speeds[i]+turtle_speeds[i]*dt;
+            break; 
+        }
+    }
+}
+
+// =================================================================
+// 3. CHECK LOG LANES (Row 4, Row 3, and Row 1 in your array)
+// =================================================================
+else if (frog_row == 4 || frog_row == 3 || frog_row == 1) 
+{
+    on_river = true;
+    
+    // Map grid rows to your log_position array indices (Row 4 -> 0, Row 3 -> 1, Row 1 -> 2)
+    int i = 0;
+    if (frog_row == 3) i = 1;
+    if (frog_row == 1) i = 2;
+
+    for (int j = 0; j < 3; j++) {
+        if (CheckCollisionRecs(frog_area, log_position[i][j])) {
+            safe_on_object = true;
+            drift_speed = log_speeds[i]+log_speeds[i]*dt;
+            break;
+        }
+    }
+}
+
+// =================================================================
+// 4. PROCESS OUTCOME Outside of Loops
+// =================================================================
+if (on_river) {
+    if (safe_on_object) {
+        // Frog rides the platform safely
+        position.x += drift_speed+drift_speed*dt;
+    } else {
+        // Frog missed everything and drowned -> Respawn
+        position.x = (float)((SCREEN_WIDTH - score_side) / 2 - LANE_SIZE / 2);
+        position.y = (float)(SCREEN_HEIGHT - LANE_SIZE);
+        --total_lives;
+    }
+}
 
        for(int i=0;i<5;i++)
        {    for(int j=0;j<3;j++)
@@ -201,8 +268,9 @@ Rectangle frog_area={position.x,position.y,55,55};
 
            }
         }
-        
-for(int i=0;i<2;i++)
+
+
+/* for(int i=0;i<2;i++)
 {    for(int j=0;j<3;j++)
     { Rectangle turtle_area=turtle_position[i][j];
      if(!CheckCollisionRecs(frog_area,turtle_area) && ((position.y>5*LANE_SIZE && position.y<6*LANE_SIZE) || (position.y>2*LANE_SIZE && position.y<3*LANE_SIZE)))
@@ -236,8 +304,9 @@ for(int i=0;i<3;i++)
     }
 
   }
-
-/*for(int i=0;i<5;i++)
+*/
+/*
+            for(int i=0;i<5;i++)
 { Rectangle safe_area=safe_house[i];
   
   if(y<60 && !(CheckCollisionRecs(frog_area,safe_area)))
@@ -253,39 +322,27 @@ else if(y<60 && (CheckCollisionRecs(frog_area,safe_area)))
 }
 
 }
-  */
+ */ 
 
 
         BeginDrawing();
             ClearBackground(BLACK);
 
-           // DrawTexturePro(bg_image,bg_src,bg_position,origin,0,WHITE);
-            DrawRectangle(0,0,SCREEN_WIDTH-score_side,LANE_SIZE,DARKGREEN);
+           DrawTexturePro(bg_image,bg_src,bg_position,origin,0,WHITE);
+           //DrawRectangle(0,0,SCREEN_WIDTH-score_side,LANE_SIZE,DARKGREEN);
             
            
-            for(int i=0;i<5;i++)
+           /*for(int i=0;i<5;i++)
             {
             DrawRectangle(190*i,0,80,LANE_SIZE,GREEN);
             }
-         
+         */
            // incase amar background na ashle
-           DrawRectangle(0,6*LANE_SIZE,SCREEN_WIDTH-score_side,LANE_SIZE,VIOLET);
-           DrawRectangle(0,12*LANE_SIZE,SCREEN_WIDTH-score_side,LANE_SIZE,VIOLET);
+          // DrawRectangle(0,6*LANE_SIZE,SCREEN_WIDTH-score_side,LANE_SIZE,VIOLET);
+           //DrawRectangle(0,12*LANE_SIZE,SCREEN_WIDTH-score_side,LANE_SIZE,VIOLET);
 
 
-
-            DrawRectangle(SCREEN_WIDTH-score_side,0,score_side,SCREEN_HEIGHT,GRAY);
-
-
-            DrawText("SCORE:\n",SCREEN_WIDTH-score_side,100,30,BLACK);
-            DrawText(TextFormat("%05d",score),SCREEN_WIDTH-score_side,150,30,BLACK);
-
-            DrawText("LIVES:\n",SCREEN_WIDTH-score_side,480,30,BLACK);
-
-            if(total_lives!=0)
-            DrawTexturePro(lives[total_lives-1],srcImglives[total_lives-1],lives_position,origin,0,WHITE);
-
-
+            
             for (int i = 0; i < 3; i++) {
                 for (int j = 0; j < 3; j++) {
                     DrawTexturePro(log[i], srcImglog[i],log_position[i][j], origin,0, WHITE);
@@ -305,7 +362,17 @@ else if(y<60 && (CheckCollisionRecs(frog_area,safe_area)))
                 }
             }
 
-            
+
+            // =================================================================
+// 5. RENDERING (Pass your fresh coordinates here)
+// =================================================================
+//if (((int)position.y % 10) != 0 || ((int)position.x % 10) != 0) { 
+    DrawTexturePro(frog[1], srcImgFrog[1], frog_area, origin, 0.0f, WHITE);
+ //} else {
+    //DrawTexturePro(frog[0], srcImgFrog[0], frog_area, origin, 0.0f, WHITE);
+//}
+
+           /*
                Rectangle frog_position={position.x-4,position.y-2,52,52};
                 
             if (((int)position.y % 10) != 0 || ((int)position.x % 10) != 0) { 
@@ -313,6 +380,17 @@ else if(y<60 && (CheckCollisionRecs(frog_area,safe_area)))
             } else {
                 DrawTexturePro(frog[0], srcImgFrog[0],frog_position, origin, 0.0f, WHITE);
             }
+         */
+        DrawRectangle(SCREEN_WIDTH-score_side,0,score_side,SCREEN_HEIGHT,BLACK);
+
+           DrawText("SCORE:\n",SCREEN_WIDTH-score_side+40,100,30,RAYWHITE);
+            DrawText(TextFormat("%05d",score),SCREEN_WIDTH-score_side+50,150,30,RAYWHITE);
+
+            DrawText("LIVES:\n",SCREEN_WIDTH-score_side+30,480,30,RAYWHITE);
+
+            if(total_lives!=0)
+            DrawTexturePro(lives[total_lives-1],srcImglives[total_lives-1],lives_position,origin,0,WHITE);
+
 
 
         EndDrawing();
