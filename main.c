@@ -8,6 +8,16 @@
 #define LANE_SIZE 60
 #define score_side 200
 
+
+typedef enum GameState { 
+    STATE_MENU,
+    STATE_CREDITS, 
+    STATE_PLAYING, 
+    STATE_GAMEOVER, 
+    STATE_VICTORY 
+} GameState;
+
+
 int main(void)
 {
     
@@ -23,6 +33,9 @@ int main(void)
     int score=0; 
     int y=0;
     
+    GameState currentState = STATE_MENU;
+    int currentLevel = 1;
+    int frogsSavedInHouses = 0; // Track completed safe houses (up to 5)
     
     
     Vector2 position = { (float)((SCREEN_WIDTH-score_side)/2-LANE_SIZE/2),(float)(SCREEN_HEIGHT-LANE_SIZE)};
@@ -122,9 +135,15 @@ int main(void)
         { { 0, cellHeight,cell_width*3, cellHeight }, { 7 *cell_width, cellHeight,cell_width*3, cellHeight }, { 14 *cell_width, cellHeight,cell_width*3, cellHeight } }
     };
 
-    Rectangle safe_house[5]={{0,0,80,LANE_SIZE},{190,0,80,LANE_SIZE},{190*2,0,80,LANE_SIZE},
-     {190*3,0,80,LANE_SIZE},{190*4,0,80,LANE_SIZE}
+   // Each rectangle represents: { X, Y, Width, Height }
+  Rectangle safe_house[5] = {
+    { 20.0f,  0.0f, (float)LANE_SIZE, (float)LANE_SIZE }, // House 1 (Far Left)
+    { 180.0f, 0.0f, (float)LANE_SIZE, (float)LANE_SIZE }, // House 2
+    { 340.0f, 0.0f, (float)LANE_SIZE, (float)LANE_SIZE }, // House 3 (Center)
+    { 500.0f, 0.0f, (float)LANE_SIZE, (float)LANE_SIZE }, // House 4
+    { 660.0f, 0.0f, (float)LANE_SIZE, (float)LANE_SIZE }  // House 5 (Far Right)
    };
+
 
 
      //OBSTACLE MOVEMENTS and SPEEDS .. TAHSIN
@@ -133,266 +152,400 @@ int main(void)
     float log_speeds[3] = { 1.5, 2.2, 1.8 };                   
     float turtle_speeds[2] = { -2.0, -1.6 };                     
 
+   // BASE VELOCITIES STORED TO SCALE SPEEDS PER LEVEL
+   float base_car_speeds[5] = { 2.5, -1.5, 2.0, -3.5, 1.2 };
+    float base_log_speeds[3] = { 1.5, 2.2, 1.8 };
+    float base_turtle_speeds[2] = { -2.0, -1.6 };
+
+
     // --- MAIN GAME LOOP ---
-    while (!WindowShouldClose() && total_lives!=0)
-    {
-        if (IsKeyPressed(KEY_UP) && position.y > 0) {
-            position.y -=speed+speed*dt;
-           if(y==0)
-           {
-            score+=10;
+    while (!WindowShouldClose())
+    { //Global resets across game loops
+        const float dt = GetFrameTime();
         
-           }
-           if(y>0) ++y;
-        }
-        if (IsKeyPressed(KEY_DOWN) && position.y < SCREEN_HEIGHT-LANE_SIZE) {
-            position.y +=speed+speed*dt;
-             ++y;
-        }
-        if (IsKeyPressed(KEY_LEFT) && position.x > 0) {
-            position.x -=speed+speed*dt;
-        }
-        if (IsKeyPressed(KEY_RIGHT) && position.x < SCREEN_WIDTH-score_side-LANE_SIZE) {
-            position.x +=speed+speed*dt;
-        }
+        // Dynamic frog bounding area calculations
+        Rectangle frog_area = { position.x + 4, position.y + 4, 52, 52 };
+        int frog_row = (int)(position.y / cellHeight); 
 
-        for (int i = 0; i < 5; i++) {
-            for (int j = 0; j < 3; j++) {
-                car_position[i][j].x += car_speeds[i];
-                if ( car_speeds[i] > 0 && car_position[i][j].x > SCREEN_WIDTH-car_position[i][j].width) {
-                    car_position[i][j].x =-car_position[i][j].width;
+        bool on_river = false;
+        bool safe_on_object = false;
+        float drift_speed = 0.0f;
+
+        // Variables management configuration setups
+        bool isBlasting = false;
+        Vector2 blastPosition = { 0, 0 };
+        int blastFrameCounter = 0;
+        const int BLAST_DURATION = 60; // 60 frames = exactly 1 second at 60 FPS
+
+        // Track which safe houses have been successfully locked down by a frog (0 = empty, 1 = filled)
+        int safeHouseFilled[5] = { 0, 0, 0, 0, 0 }; 
+
+        switch (currentState)
+        {   
+            case STATE_MENU:
+                if (IsKeyPressed(KEY_SPACE)) {
+                    currentState = STATE_CREDITS;
                 }
-                else if (car_speeds[i] < 0 && car_position[i][j].x < -car_position[i][j].width) {
-                    car_position[i][j].x = SCREEN_WIDTH-score_side-car_position[i][j].width;
+
+                else if(IsKeyPressed(KEY_ENTER))
+                {
+                  // Reset full match parameters on new play start
+                    total_lives = 5;
+                    score = 0;
+                    currentLevel = 1;
+                    frogsSavedInHouses = 0;
+                    for(int i = 0; i < 5; i++) safeHouseFilled[i] = 0;
+                    
+                    // Reset speed arrays to base baseline rates
+                    for(int i = 0; i < 5; i++) car_speeds[i] = base_car_speeds[i];
+                    for(int i = 0; i < 3; i++) log_speeds[i] = base_log_speeds[i];
+                    for(int i = 0; i < 2; i++) turtle_speeds[i] = base_turtle_speeds[i];
+
+                    // Reset Frog spawn coordinate points
+                    position.x = (float)((SCREEN_WIDTH - score_side) / 2 - LANE_SIZE / 2);
+                    position.y = (float)(SCREEN_HEIGHT - LANE_SIZE);
+                    currentState = STATE_PLAYING; 
                 }
-            }
-        }
+                break;
+            case STATE_CREDITS:
+             if(IsKeyPressed(KEY_ENTER))
+                {
+                  // Reset full match parameters on new play start
+                    total_lives = 5;
+                    score = 0;
+                    currentLevel = 1;
+                    frogsSavedInHouses = 0;
+                    for(int i = 0; i < 5; i++) safeHouseFilled[i] = 0;
+                    
+                    // Reset speed arrays to base baseline rates
+                    for(int i = 0; i < 5; i++) car_speeds[i] = base_car_speeds[i];
+                    for(int i = 0; i < 3; i++) log_speeds[i] = base_log_speeds[i];
+                    for(int i = 0; i < 2; i++) turtle_speeds[i] = base_turtle_speeds[i];
 
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                log_position[i][j].x += log_speeds[i];
-                if (log_position[i][j].x > SCREEN_WIDTH-log_position[i][j].width) {
-                    log_position[i][j].x = -log_position[i][j].width;
+                    // Reset Frog spawn coordinate points
+                    position.x = (float)((SCREEN_WIDTH - score_side) / 2 - LANE_SIZE / 2);
+                    position.y = (float)(SCREEN_HEIGHT - LANE_SIZE);
+                    currentState = STATE_PLAYING; 
                 }
-            }
-        }
-
-        for (int i = 0; i < 2; i++) {
-            for (int j = 0; j < 3; j++) {
-                turtle_position[i][j].x += turtle_speeds[i];
-                if (turtle_position[i][j].x < -turtle_position[i][j].width) {
-                    turtle_position[i][j].x = SCREEN_WIDTH-score_side-turtle_position[i][j].width;
+                break;
+            
+            case STATE_PLAYING:
+                // Check general failure match over triggers
+                if (total_lives <= 0) {
+                    currentState = STATE_GAMEOVER;
+                    break;
                 }
-            }
-        }
 
-// =================================================================
-// 1. UPDATE THE FROG'S COLLISION RECTANGLE EVERY FRAME (CRITICAL!)
-// =================================================================
-// We update frog_area dynamically using the current position.x and position.y
-Rectangle frog_area = { position.x - 4, position.y - 2, 52, 52 };
+                // --- 1. KEYBOARD INPUT INPUT HANDLING ---
+                if (IsKeyPressed(KEY_UP) && position.y > 0) {
+                    position.y -= LANE_SIZE; // Changed to instant lane jump spacing 
+                    //PlaySound(jumpSound);
+                    if (y == 0) { score += 10; }
+                    if (y > 0) ++y;
+                }
+                if (IsKeyPressed(KEY_DOWN) && position.y < SCREEN_HEIGHT - LANE_SIZE) {
+                    position.y += LANE_SIZE;
+                  //  PlaySound(jumpSound);
+                    ++y;
+                }
+                if (IsKeyPressed(KEY_LEFT) && position.x > 0) {
+                    position.x -= LANE_SIZE;
+                   // PlaySound(jumpSound);
+                }
+                if (IsKeyPressed(KEY_RIGHT) && position.x < SCREEN_WIDTH - score_side - LANE_SIZE) {
+                    position.x += LANE_SIZE;
+                   // PlaySound(jumpSound);
+                }
 
-// Convert the frog's exact Y position to its current grid row index
-int frog_row = (int)(position.y / cellHeight); 
+                // --- 2. MOVE ENVIRONMENT ELEMENTS CONTROLS ---
+                for (int i = 0; i < 5; i++) {
+                    for (int j = 0; j < 3; j++) {
+                        car_position[i][j].x += car_speeds[i];
+                        if (car_speeds[i] > 0 && car_position[i][j].x > SCREEN_WIDTH - score_side) {
+                            car_position[i][j].x = -car_position[i][j].width;
+                        }
+                        else if (car_speeds[i] < 0 && car_position[i][j].x < -car_position[i][j].width) {
+                            car_position[i][j].x = SCREEN_WIDTH - score_side - car_position[i][j].width;
+                        }
+                    }
+                }
 
-bool on_river = false;
-bool safe_on_object = false;
-float drift_speed = 0.0f;
+                for (int i = 0; i < 3; i++) {
+                    for (int j = 0; j < 3; j++) {
+                        log_position[i][j].x += log_speeds[i];
+                        if (log_speeds[i] > 0 && log_position[i][j].x > SCREEN_WIDTH - score_side) {
+                            log_position[i][j].x = -log_position[i][j].width;
+                        }
+                    }
+                }
 
-// =================================================================
-// 2. CHECK TURTLE LANES (Row 5 and Row 2 in your array)
-// =================================================================
-if (frog_row == 5 || frog_row == 2) 
-{
-    on_river = true;
-    
-    // Map grid rows to your turtle_position array indices (Row 5 -> Index 0, Row 2 -> Index 1)
-    int i = (frog_row == 5) ? 0 : 1; 
-    
-    for (int j = 0; j < 3; j++) {
-        if (CheckCollisionRecs(frog_area, turtle_position[i][j])) {
-            safe_on_object = true;
-            drift_speed = turtle_speeds[i]+turtle_speeds[i]*dt;
-            break; 
-        }
-    }
-}
+                for (int i = 0; i < 2; i++) {
+                    for (int j = 0; j < 3; j++) {
+                        turtle_position[i][j].x += turtle_speeds[i];
+                        if (turtle_position[i][j].x < -turtle_position[i][j].width) {
+                            turtle_position[i][j].x = SCREEN_WIDTH - score_side;
+                        }
+                    }
+                }
 
-// =================================================================
-// 3. CHECK LOG LANES (Row 4, Row 3, and Row 1 in your array)
-// =================================================================
-else if (frog_row == 4 || frog_row == 3 || frog_row == 1) 
-{
-    on_river = true;
-    
-    // Map grid rows to your log_position array indices (Row 4 -> 0, Row 3 -> 1, Row 1 -> 2)
-    int i = 0;
-    if (frog_row == 3) i = 1;
-    if (frog_row == 1) i = 2;
+                // --- 3. DYNAMIC COLLISIONS AREA CHECKS ---
+                Rectangle frog_area = { position.x + 4, position.y + 4, 52, 52 };
+                int frog_row = (int)(position.y / cellHeight); 
 
-    for (int j = 0; j < 3; j++) {
-        if (CheckCollisionRecs(frog_area, log_position[i][j])) {
-            safe_on_object = true;
-            drift_speed = log_speeds[i]+log_speeds[i]*dt;
-            break;
-        }
-    }
-}
+                bool on_river = false;
+                bool safe_on_object = false;
+                float drift_speed = 0.0f;
 
-// =================================================================
-// 4. PROCESS OUTCOME Outside of Loops
-// =================================================================
-if (on_river) {
-    if (safe_on_object) {
-        // Frog rides the platform safely
-        position.x += drift_speed+drift_speed*dt;
-    } else {
-        // Frog missed everything and drowned -> Respawn
-        position.x = (float)((SCREEN_WIDTH - score_side) / 2 - LANE_SIZE / 2);
-        position.y = (float)(SCREEN_HEIGHT - LANE_SIZE);
-        --total_lives;
-    }
-}
+                // Checking Water-Zone River elements 
+                if (frog_row == 5 || frog_row == 2) {
+                    on_river = true;
+                    int i = (frog_row == 5) ? 0 : 1; 
+                    for (int j = 0; j < 3; j++) {
+                        if (CheckCollisionRecs(frog_area, turtle_position[i][j])) {
+                            safe_on_object = true;
+                            drift_speed = turtle_speeds[i];
+                            break; 
+                        }
+                    }
+                }
+                else if (frog_row == 4 || frog_row == 3 || frog_row == 1) {
+                    on_river = true;
+                    int i = (frog_row == 4) ? 0 : ((frog_row == 3) ? 1 : 2);
+                    for (int j = 0; j < 3; j++) {
+                        if (CheckCollisionRecs(frog_area, log_position[i][j])) {
+                            safe_on_object = true;
+                            drift_speed = log_speeds[i];
+                            break;
+                        }
+                    }
+                }
 
-       for(int i=0;i<5;i++)
-       {    for(int j=0;j<3;j++)
-           { Rectangle car_area=car_position[i][j];
-             
-             if(CheckCollisionRecs(frog_area,car_area) && position.y>7*LANE_SIZE && position.y<12*LANE_SIZE)
-             {
-                position.x=(float)((SCREEN_WIDTH-score_side)/2-LANE_SIZE/2),
-                position.y= (float)(SCREEN_HEIGHT- LANE_SIZE);
+                // Process Water Row Outcomes
+                if (on_river) {
+                    if (safe_on_object) {
+                        position.x += drift_speed;
+                        // Dead boundary safety checks
+                        if (position.x < 0 || position.x > SCREEN_WIDTH - score_side - LANE_SIZE) {
+                            isBlasting = true;
+                            blastPosition = (Vector2){ position.x + LANE_SIZE/2, position.y + LANE_SIZE/2 };
+                            blastFrameCounter = 0;
+                        //    PlaySound(drownSound);
+                            
+                            position.x = (float)((SCREEN_WIDTH - score_side) / 2 - LANE_SIZE / 2);
+                            position.y = (float)(SCREEN_HEIGHT - LANE_SIZE);
+                            --total_lives;
+                        }
+                    } else {
+                        // Triggers Drown Action Events
+                        isBlasting = true;
+                        blastPosition = (Vector2){ position.x + LANE_SIZE/2, position.y + LANE_SIZE/2 };
+                        blastFrameCounter = 0;
+                      //  PlaySound(drownSound);
 
-                --total_lives;
-             }
+                        position.x = (float)((SCREEN_WIDTH - score_side) / 2 - LANE_SIZE / 2);
+                        position.y = (float)(SCREEN_HEIGHT - LANE_SIZE);
+                        --total_lives;
+                    }
+                }
 
-           }
-        }
+                // Ground Road Vehicle Hit Collision Logic
+                for (int i = 0; i < 5; i++) {
+                    for (int j = 0; j < 3; j++) {
+                        if (CheckCollisionRecs(frog_area, car_position[i][j]) && position.y > 6 * LANE_SIZE && position.y < 12 * LANE_SIZE) {
+                            isBlasting = true;
+                            blastPosition = (Vector2){ position.x + LANE_SIZE/2, position.y + LANE_SIZE/2 };
+                            blastFrameCounter = 0;
+                         //   PlaySound(blastSound);
 
+                            position.x = (float)((SCREEN_WIDTH - score_side) / 2 - LANE_SIZE / 2);
+                            position.y = (float)(SCREEN_HEIGHT - LANE_SIZE);
+                            --total_lives;
+                        }
+                    }
+                }
 
-/* for(int i=0;i<2;i++)
-{    for(int j=0;j<3;j++)
-    { Rectangle turtle_area=turtle_position[i][j];
-     if(!CheckCollisionRecs(frog_area,turtle_area) && ((position.y>5*LANE_SIZE && position.y<6*LANE_SIZE) || (position.y>2*LANE_SIZE && position.y<3*LANE_SIZE)))
-    {
-     position.x=(float)((SCREEN_WIDTH-score_side)/2-LANE_SIZE/2),
-     position.y= (float)(SCREEN_HEIGHT-LANE_SIZE);
+                // --- 4. TOP SAFE HOUSES VICTORY LOGIC MAP ---
+                                // --- 4. TOP SAFE HOUSES LOGIC INTERSECTIONS ---
+                if (frog_row == 0) {
+                    bool hit_house = false;
+                    for (int i = 0; i < 4; i++) { 
+                        if (CheckCollisionRecs(frog_area, safe_house[i])) {
+                            hit_house = true;
+                            
+                            // 🎯 PRO TIP: Even if they hit an already filled house, we still advance them!
+                            currentLevel++;
+                            score += 200;
+                            
+                            // Clear out all safe houses so the next level starts completely clean
+                            for (int k = 0; k < 4; k++) safeHouseFilled[k] = 0;
+                            
+                            // Check if they beat the final level
+                            if (currentLevel > 5) {
+                                currentState = STATE_VICTORY;
+                            } else {
+                                // ⚡ IMMEDIATE SPEED BOOST: Make obstacles notably faster for the new level
+                                for (int s = 0; s < 5; s++) car_speeds[s] *= 1.35f;
+                                for (int s = 0; s < 3; s++) log_speeds[s] *= 1.30f;
+                                for (int s = 0; s < 2; s++) turtle_speeds[s] *= 1.30f;
+                            }
 
-    --total_lives;
-   }
-   else if((position.y>5*LANE_SIZE && position.y<6*LANE_SIZE) || (position.y>2*LANE_SIZE && position.y<3*LANE_SIZE))
-  {
-   position.x+=turtle_speeds[i];
-   }
-    }
-}
-for(int i=0;i<3;i++)
- {   for(int j=0;j<3;j++)
-    { Rectangle log_area=log_position[i][j];
-     if(!CheckCollisionRecs(frog_area,log_area) && ((position.y>4*LANE_SIZE && position.y<5*LANE_SIZE) || (position.y>3*LANE_SIZE && position.y<4*LANE_SIZE) || (position.y>LANE_SIZE && position.y<2*LANE_SIZE)))
-    {
-    position.x=(float)((SCREEN_WIDTH-score_side)/2-LANE_SIZE/2),
-     position.y= (float)(SCREEN_HEIGHT- LANE_SIZE);
+                            // Instantly reset frog back to spawn area for the next level
+                            position.x = (float)((SCREEN_WIDTH - score_side) / 2 - LANE_SIZE / 2);
+                            position.y = (float)(SCREEN_HEIGHT - LANE_SIZE);
+                            break;
+                        }
+                    }
+                    
+                    // Landed in a top wall slot (green bush) instead of a safe house open frame
+                    if (!hit_house) {
+                        isBlasting = true; 
+                        blastPosition = (Vector2){ position.x + LANE_SIZE / 2.0f, position.y + LANE_SIZE / 2.0f };
+                        blastFrameCounter = 0;
 
-    --total_lives;
-   }
-   else if((position.y>4*LANE_SIZE && position.y<5*LANE_SIZE) || (position.y>3*LANE_SIZE && position.y<4*LANE_SIZE) || (position.y>LANE_SIZE && position.y<2*LANE_SIZE))
-   {
-    position.x+=log_speeds[i];
-    }
+                        position.x = (float)((SCREEN_WIDTH - score_side) / 2 - LANE_SIZE / 2);
+                        position.y = (float)(SCREEN_HEIGHT - LANE_SIZE);
+                        
+                        --total_lives; 
+                    }
+                   }
+                    break; 
+            
+                 // This ends STATE_PLAYING
 
-    }
-
-  }
-*/
-/*
-            for(int i=0;i<5;i++)
-{ Rectangle safe_area=safe_house[i];
-  
-  if(y<60 && !(CheckCollisionRecs(frog_area,safe_area)))
-  {
-    position.x=(float)((SCREEN_WIDTH-score_side)/2-LANE_SIZE/2),
-     position.y= (float)(SCREEN_HEIGHT- LANE_SIZE);
-
-    --total_lives;
-  }
-else if(y<60 && (CheckCollisionRecs(frog_area,safe_area)))
-{
-   DrawTexturePro(endfrog,srcEndFrog,safe_house[i],origin,0,WHITE);
-}
-
-}
- */ 
+            case STATE_GAMEOVER:
+                  break;
+            case STATE_VICTORY:
+                if (IsKeyPressed(KEY_ENTER)) {
+                    currentState = STATE_MENU;
+                    break;                
+                }
+       } 
 
 
         BeginDrawing();
             ClearBackground(BLACK);
+        if (currentState == STATE_CREDITS) {
+        DrawText("Roll: 2505059 ", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/3, 45, GREEN);
+        DrawText("NAME: G.M. TAHSIN AMIN",SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/3+50, 45, GREEN);
+         
+        DrawText("Roll: 2505039 ", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/3+98, 45, BLUE);
+        DrawText("NAME: ABIR HOSSAIN",SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/3+140, 45,BLUE);
 
-           DrawTexturePro(bg_image,bg_src,bg_position,origin,0,WHITE);
-           //DrawRectangle(0,0,SCREEN_WIDTH-score_side,LANE_SIZE,DARKGREEN);
-            
+        DrawText("PRESS [ENTER] TO START MISSION", SCREEN_WIDTH/2 - 200, SCREEN_HEIGHT - 120, 20, WHITE);
+        }
            
-           /*for(int i=0;i<5;i++)
-            {
-            DrawRectangle(190*i,0,80,LANE_SIZE,GREEN);
-            }
-         */
-           // incase amar background na ashle
-          // DrawRectangle(0,6*LANE_SIZE,SCREEN_WIDTH-score_side,LANE_SIZE,VIOLET);
-           //DrawRectangle(0,12*LANE_SIZE,SCREEN_WIDTH-score_side,LANE_SIZE,VIOLET);
-
-
+        else if (currentState == STATE_MENU) {
+            DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, DARKBLUE);
+            DrawText("FROGGER ARCADE", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/3, 45, GREEN);
+            DrawText("PRESS [ENTER] TO START MISSION", SCREEN_WIDTH/2 - 200, SCREEN_HEIGHT/2, 20, WHITE);
+            DrawText("PRESS [SPACE] TO SEE CREDITS", SCREEN_WIDTH/2 - 200, SCREEN_HEIGHT/2+200, 20, WHITE);
             
+        }
+
+
+        else if (currentState == STATE_PLAYING) {
+            // Draw background layout elements
+            DrawTexturePro(bg_image, bg_src, bg_position, origin, 0, WHITE);
+
+            // Draw locked goal units onto safe houses maps
+            for (int i = 0; i < 5; i++) {
+                if (safeHouseFilled[i] == 1) {
+                    DrawTexturePro(endfrog, srcEndFrog, safe_house[i], origin, 0, WHITE);
+                }
+            }
+
+            // Draw world actors
             for (int i = 0; i < 3; i++) {
                 for (int j = 0; j < 3; j++) {
-                    DrawTexturePro(log[i], srcImglog[i],log_position[i][j], origin,0, WHITE);
+                    DrawTexturePro(log[i], srcImglog[i], log_position[i][j], origin, 0, WHITE);
                 }
             }
-
             for (int i = 0; i < 2; i++) {
                 for (int j = 0; j < 3; j++) {
-                    DrawTexturePro(turtles[i], srcImgturtles[i], turtle_position[i][j], origin,0, WHITE);
+                    DrawTexturePro(turtles[i], srcImgturtles[i], turtle_position[i][j], origin, 0, WHITE);
                 }
             }
-
             for (int i = 0; i < 5; i++) {
                 for (int j = 0; j < 3; j++) {
-                   
-                    DrawTexturePro(car[i], srcImgcar[i], car_position[i][j], origin,0, WHITE);
+                    DrawTexturePro(car[i], srcImgcar[i], car_position[i][j], origin, 0, WHITE);
                 }
             }
 
+            // Draw player frog model bounds
+            Rectangle frog_draw_rect = { position.x - 4, position.y - 2, 52, 52 };
+            DrawTexturePro(frog[1], srcImgFrog[1], frog_draw_rect, origin, 0.0f, WHITE);
 
-            // =================================================================
-// 5. RENDERING (Pass your fresh coordinates here)
-// =================================================================
-//if (((int)position.y % 10) != 0 || ((int)position.x % 10) != 0) { 
-    DrawTexturePro(frog[1], srcImgFrog[1], frog_area, origin, 0.0f, WHITE);
- //} else {
-    //DrawTexturePro(frog[0], srcImgFrog[0], frog_area, origin, 0.0f, WHITE);
-//}
+            // Handle death blast visual animations over layouts
+            if (isBlasting) {
+              blastFrameCounter++;
+    
+                // Slow down expansion speed so it doesn't get too massive over 60 frames
+               float radius = (float)blastFrameCounter * 1.0f; 
+    
+                 // Calculate fading smoothly relative to the new 60-frame maximum duration
+                Color blastColor = (Color){ 255, 80, 0, (unsigned char)(255 * (1.0f - (float)blastFrameCounter / BLAST_DURATION)) };
+    
+                DrawCircleLines(blastPosition.x, blastPosition.y, radius, blastColor);
+                DrawCircle(blastPosition.x, blastPosition.y, radius * 0.4f, YELLOW);
+    
+                 if (blastFrameCounter >= BLAST_DURATION) isBlasting = false;
+                }
 
-           /*
-               Rectangle frog_position={position.x-4,position.y-2,52,52};
-                
-            if (((int)position.y % 10) != 0 || ((int)position.x % 10) != 0) { 
-                DrawTexturePro(frog[1], srcImgFrog[1], frog_position, origin, 0.0f, WHITE);
-            } else {
-                DrawTexturePro(frog[0], srcImgFrog[0],frog_position, origin, 0.0f, WHITE);
+            // --- 5. RENDER MENU BAR & DASHBOARD SIDEBAR PANEL ---
+            DrawRectangle(SCREEN_WIDTH - score_side, 0, score_side, SCREEN_HEIGHT, DARKGRAY);
+            DrawLine(SCREEN_WIDTH - score_side, 0, SCREEN_WIDTH - score_side, SCREEN_HEIGHT, WHITE);
+            
+            DrawText("DASHBOARD", SCREEN_WIDTH - score_side + 35, 40, 22, GREEN);
+            DrawText(TextFormat("SCORE\n%05d", score), SCREEN_WIDTH - score_side + 20, 120, 20, WHITE);
+            DrawText(TextFormat("LEVEL\n%d / 5", currentLevel), SCREEN_WIDTH - score_side + 20, 220, 20, GOLD);
+            DrawText("REMAINING LIVES:", SCREEN_WIDTH - score_side + 20, 480, 16, RED);
+
+            // Draw visual image status representing lives count left safely
+            if (total_lives >= 1 && total_lives <= 5) {
+                DrawTexturePro(lives[total_lives - 1], srcImglives[total_lives - 1], lives_position, origin, 0, WHITE);
             }
-         */
-        DrawRectangle(SCREEN_WIDTH-score_side,0,score_side,SCREEN_HEIGHT,BLACK);
-
-           DrawText("SCORE:\n",SCREEN_WIDTH-score_side+40,100,30,RAYWHITE);
-            DrawText(TextFormat("%05d",score),SCREEN_WIDTH-score_side+50,150,30,RAYWHITE);
-
-            DrawText("LIVES:\n",SCREEN_WIDTH-score_side+30,480,30,RAYWHITE);
-
-            if(total_lives!=0)
-            DrawTexturePro(lives[total_lives-1],srcImglives[total_lives-1],lives_position,origin,0,WHITE);
-
+        }
+        else if (currentState == STATE_GAMEOVER) {
+            DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+            DrawText("GAME OVER", SCREEN_WIDTH/2 - 130, SCREEN_HEIGHT/2 -130, 45, RED);
+           // DrawText("PRESS [ENTER] TO RETURN TO MENU", SCREEN_WIDTH/2 - 180, SCREEN_HEIGHT/2 + 30, 18, WHITE);
+           DrawText(TextFormat("SCORE\n%05d",score),SCREEN_WIDTH/2 - 130, SCREEN_HEIGHT/2 - 40, 45, WHITE);
+        }
+        else if (currentState == STATE_VICTORY) {
+            DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+            DrawText("VICTORY CONQUERED!", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 40, 40, GOLD);
+            DrawText("YOU BEAT ALL 5 LEVELS!", SCREEN_WIDTH/2 - 130, SCREEN_HEIGHT/2 + 20, 20, GREEN);
+           // DrawText("PRESS [ENTER] TO RELOAD MENU", SCREEN_WIDTH/2 - 160, SCREEN_HEIGHT/2 + 70, 18, WHITE);
+            
+        }
 
 
         EndDrawing();
     }
+    //UnloadSound(jumpSound);
+    //UnloadSound(drownSound);
+    //UnloadSound(blastSound);
+   // CloseAudioDevice();
+
+    UnloadTexture(bg_image);
+    UnloadTexture(fly);
+    UnloadTexture(endfrog);
+    
+    for (int i = 0; i < 2; i++) {
+        UnloadTexture(frog[i]);
+        UnloadTexture(turtles[i]);
+    }
+    for (int i = 0; i < 3; i++) {
+        UnloadTexture(log[i]);
+        UnloadTexture(shells[i]);
+    }
+    for (int i = 0; i < 5; i++) {
+        UnloadTexture(car[i]);
+        UnloadTexture(lives[i]);
+    }
+
+    CloseWindow();
+    return 0;
 }
+
+
